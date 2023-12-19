@@ -627,3 +627,46 @@ $JsonFilePath = "E:\JSON Export Files\LegacyAppAccess_Members.json"
 $GroupMembers | ConvertTo-Json | Set-Content -Path $JsonFilePath
 
 Write-Host "Member information of '$GroupName' exported to '$JsonFilePath'."
+
+
+## Using a script to create build users in a file ##
+
+param (
+    [string]$Name = "",
+    [string]$FilePath = "C:\Path\To\Your\File.txt"
+)
+
+# Function to create a user account
+function Create-User {
+    param (
+        [string]$FullName
+    )
+
+    $FirstName, $LastName = $FullName -split ' ', 2
+    $Username = $FirstName[0] + $LastName
+
+    # Set a fixed password for each user
+    $Password = ConvertTo-SecureString -String "Password" -AsPlainText -Force
+
+    # Create the user account
+    New-LocalUser -Name $Username -FullName $FullName -Description "User Account for $FullName" -Password $Password -AccountNeverExpires
+
+    # Add the user to the specified local group
+    $GroupName = "LegacyAppAccess"
+    Add-LocalGroupMember -Group $GroupName -Member $Username
+
+    # Display a message with the created username
+    Write-Host "User account '$Username' created successfully."
+}
+
+# If a specific name is provided, create a single user
+if ($Name -ne "") {
+    Create-User -FullName $Name
+}
+else {
+    # If no specific name is provided, read names from the file and create users
+    Get-Content $FilePath | ForEach-Object {
+        Create-User -FullName $_
+    }
+}
+
