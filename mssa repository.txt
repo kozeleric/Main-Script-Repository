@@ -670,3 +670,16 @@ else {
     }
 }
 
+## Scheduling a task to run the script daily ##
+
+# Specify the script path
+$ScriptPath = "C:\Path\To\Your\Script.ps1"
+ 
+# Specify the time and frequency for the task
+$Trigger = New-ScheduledTaskTrigger -Daily -At "12:00 AM"
+ 
+# Specify the action to run the PowerShell script
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-File $ScriptPath"
+ 
+# Create the scheduled task
+$TaskAction = Register-ScheduledTask -Action $Action -Trigger $Trigger -TaskName "YourTaskName" -User "YourUserName" -Password "YourPassword" -RunLevel Highest
