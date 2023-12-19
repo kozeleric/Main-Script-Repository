@@ -1,0 +1,629 @@
+Enabling nested virtualization
+
+
+## Create Hyper-V Machine
+$VMName = "MSSAVM"
+
+ 
+
+$VM = @{
+     Name = $VMName
+     MemoryStartupBytes = 2147483648
+     Generation = 2
+     NewVHDPath = "C:\vmstore\$VMName\$VMName.vhdx"
+     NewVHDSizeBytes = 53687091200
+     BootDevice = "VHD"
+     Path = "C:\vmstore\$VMName"
+}
+
+ 
+
+New-VM @VM
+
+# Display Virtual Switches for the VM
+Get-VM "MSSAVM" | Get-VMNetworkAdapter
+
+ 
+
+# Get all the Virtual Switches on the Host
+Get-VMSwitch | ft
+
+ 
+
+# Connect the Private Virtual Switch to the Machine 
+Get-VM "MSSAVM" | Get-VMNetworkAdapter | Connect-VMNetworkAdapter -SwitchName "PVS"
+
+ 
+
+# Boot the VM
+Start-VM -Name MSSAVM -Verbose
+
+ 
+
+# Show Status of Running and off VM's
+Get-VM | where {$_.State -eq 'Running'}
+
+ 
+
+Get-VM | where {$_.State -eq 'Off'}
+
+ 
+
+# Shuts down the VM
+Stop-VM -Name MSSAVM
+
+ 
+
+# Configures Startup and Dynamic Memory for the VM
+Set-VMMemory -VMName MSSAVM -DynamicMemoryEnabled $true -StartupBytes 2048MB -MinimumByte 2048MB
+
+ 
+
+# Deletes and Remove all File resources for the VM
+Remove-VM -Name MSSAVM -Force -Verbose
+
+ 
+
+Stop-VM -Name CL-1
+
+ 
+
+Remove-Item -Path C:\vmstore\MSSAVM\MSSAVM.vhdx -Confirm
+
+ 
+
+Remove-Item -Path C:\vmstore\MSSAVM -Force
+
+
+
+
+
+
+
+						Setting up Nested Virtualization
+
+	https://techcommunity.microsoft.com/t5/itops-talk-blog/how-to-setup-nested-virtualization-for-azure-vm-vhd/ba-p/1115338
+
+
+Install-WindowsFeature -Name DHCP,Hyper-V  –IncludeManagementTools
+
+"""Once roles are installed without error restart Azure VM.""" 
+
+Shutdown -R
+
+"""When Azure VM comes back up, RDP into it, open PowerShell as an administrator and run commands below to configure the HyperV network.""
+
+$switchName = "InternalNAT"
+New-VMSwitch -Name $switchName -SwitchType Internal
+New-NetNat –Name $switchName –InternalIPInterfaceAddressPrefix “192.168.0.0/24”
+$ifIndex = (Get-NetAdapter | ? {$_.name -like "*$switchName)"}).ifIndex
+New-NetIPAddress -IPAddress 192.168.0.1 -InterfaceIndex $ifIndex -PrefixLength 24
+
+Add-DhcpServerV4Scope -Name "DHCP-$switchName" -StartRange 192.168.0.50 -EndRange 192.168.0.100 -SubnetMask 255.255.255.0
+Set-DhcpServerV4OptionValue -Router 192.168.0.1 -DnsServer 168.63.129.16
+Restart-service dhcpserver
+
+Add-NetNatStaticMapping -NatName "InternalNat" -Protocol TCP -ExternalIPAddress 0.0.0.0 -InternalIPAddress 192.168.0.50 -InternalPort 3389 -ExternalPort 50000
+
+
+
+
+								RSAT
+
+# Specify the target Organizational Unit (OU) path
+$ouPath = "OU=Customer Merger,OU=Users,OU=Abaco,DC=timber,DC=local"
+# Array of user data (first name and last name)
+$userData = @(
+    @{FirstName="Rylee"; LastName="Edwards"},
+    @{FirstName="Ryan"; LastName="Alvarez"},
+    @{FirstName="Angela"; LastName="Murray"},
+    @{FirstName="Natalia"; LastName="Fox"},
+    @{FirstName="Travis"; LastName="Ortiz"},
+    @{FirstName="William"; LastName="Allen"}
+    # Add more user data as needed
+)
+foreach ($user in $userData) {
+    # Construct the user logon name by using only the first name
+    $userLogonName = $user.FirstName
+    # Construct the full Distinguished Name (DN) for the new user
+    $userDN = "CN=$($user.FirstName) $($user.LastName),$ouPath"
+    # Create the new user
+    New-ADUser -SamAccountName $userLogonName -UserPrincipalName "$userLogonName@timber.local" -GivenName $user.FirstName -Surname $user.LastName -Name "$($user.FirstName) $($user.LastName)" -DisplayName "$($user.FirstName) $($user.LastName)" -Path $ouPath -AccountPassword (ConvertTo-SecureString "demo@pass123" -AsPlainText -Force) -Enabled $true
+    # Display a message indicating the user creation
+    Write-Host "User $($user.FirstName) $($user.LastName) created in $ouPath with logon name $userLogonName"
+}
+
+
+
+
+IMPORTED
+
+#Create VM 
+mkdir c:\vms 
+New-VM -Name "VMName" -MemoryStartupBytes 2048MB -Path "C:\VMs" -NewVHDPath "C:\VMs\VMName.vhdx" -NewVHDSizeBytes 60GB -Generation 2
+
+#Get-Module (displays list of cmdlets available for the module referenced)
+Get-Module *sched* -ListAvaialble
+
+#Help Syntax
+Get-Help *noun*
+Get-Command *noun*
+Get-Module *noun* -ListAvailable
+Get-Alias *noun*
+Get-Help about_comparison_operators -ShowWindow
+
+
+
+#User Management Dmdlets
+New-ADUser – Creates a user account
+Set-ADUser – Modifies properties of a user account
+Remove-ADUser – Deletes a user account
+Set-ADAccountPassword – Resets the password
+Set-ADAccountExpiration – Modifies Expiration date
+Unlock-ADAccount – Unlocks a user account that's been locked after exceeding the permitted number of incorrect sign-in attempts
+Enable-ADAccount – Enales a user account
+Disable-ADAccount – Disables a user account
+
+
+#Group Management Dmdlets
+
+New-ADGroup - Creates a new group
+Set-ADGroup - Modifies properties of a group
+Get-ADGroup - Displays properties of a group
+Remove-ADGroup - Deletes a group
+Add-ADGroupMember - Adds members to a group
+Get-ADGroup Member - Displays membership of a group
+Remove-ADGroupMember
+Add-ADPrincipalGroupMembership
+Get-ADPrincipalGroupMembership - Displays group Membership of an object
+Remove-ADPrincipalGroupMembership - Removes group membership from an object
+
+#Syntax Example:
+New-ADGroup -Name "FileServerAdmins" -GroupScope Global
+
+
+#Computer managing Cmdlets
+New-ADComputer - Creates a new computer account 
+Set-ADComputer - Modifies properties of a computer account 
+Get-ADComputer - Displays properties of a computer account 
+Remove-ADComputer  - Deletes a computer account 
+Test-ComputerSecureChannel - Verifies or repairs the trust relationship between a computer and a domain
+Reset-ComputerMachinePassword - Resets the password for a computer account  
+
+#Syntax Example:
+New-ADComputer -Name LON-CLI O -Path -Enabled Strue 
+
+
+#Cmdlets for OU management 
+New-ADOrganizationalUnit - Creates an OU 
+Set-ADOrganizationalUnit - Modifies properties of an OU 
+Get-ADOrganizationalUnit - Displays properties of an OU 
+Remove-ADOrganizationalUnit - Deletes an OU 
+#Parameters for New-ADOrganizationalUnit 
+-Name - Defines the name of a new OU 
+-Path - Defines the location of a new OU 
+-ProtectedFromAccidentalDeletion - Prevents anyone from accidentally deleting an OIJ; the default value is $true 
+
+#Active Directory object cmdlets 
+New-ADObject - Creates a new Active Directory object 
+Set-ADObject - Modified properties of an Active Directory object 
+Get-ADObject - Displays properties of an Active Directory object 
+Remove-ADObject - Deletes an Active Dirqtory object 
+Rename-ADObject - Renames an Active Directory object 
+Restore-ADObject - Restores a deleted Active Directory object from the Active Directory recycle bin
+Move-ADObject - Moves an Active Directory object from one container to another container 
+Sync-ADObject - Syncs an Active Directory object between two domain controllers 
+
+#Syntax Example:
+New-ADObject -Name "AnaBowmancontact" -Type contact 
+
+
+#Managing IP addresses 
+New-NetIPAddress - Creates a new IP address 
+Set-NetIPAddress - Sets properties of an IP address 
+Get-NetIPAddress - Displays properties of an IP address 
+Remove-NetIPAddress - Deletes an IP address 
+
+#Syntax Example:
+New-NetlPAddress -IPAddress 192.168. 1. 10 -InterfaceAlias "Ethernet" -PrefixLength 24 -DefaultGateway 192.168. 1. 1
+
+
+#Managing routing 
+New-NetRoute - Creates an IP routing table entry
+Set-NetRoute - Sets properties of an IP routing table entry 
+Get-NetRoute - Displays properties of an IP routing table entry 
+Remove-NetRoute - Deletes an IP routing table entry 
+Find-NetRoute - Identifies the best local IP address and route to reach a remote address 
+
+#Syntax Example:
+New-NetRoute -DestinationPrefix -InterfaceAlias "Ethernet" -DefaultGateway 192.168. 1. 1 
+
+
+#Managing DNS client
+
+Get-DnsClient - Gets details about a network interface on a computer 
+Set-DnsClient - Set DNS client configuration settings for a network interface 
+Get-Dns ClientServerAddress- Gets the DNS server address settings for a network interface 
+Set-Dns ClientServerAddress - Sets the DNS server address for a network interface 
+Get-DnsClient - Gets details about a network interface on a computer 
+
+#Syntax Example:
+Set-DnsClient -InterfaceAlias Ethernet -ConnectionSpecificSuffix "adatum.corn" 
+
+
+#Managing Windows Firewall  
+New-NetFirewallRule - Creates a new firewall rule 
+Set-NetFirqwallRule - Sets properties for firewall rules 
+Get-NetFirewallRule - Gets properties for firewall rules 
+Remove-NetFirewallRule - Deletes firewall rules 
+Rename-NetFirewallRule - Renames firewall rules 
+Copy-NetFirewallRule - Makes a copy of firewall rules 
+Enable-NetFirewallRule - Enables firewall rules 
+Disable-NetFirewallRule - Disables firewall rules 
+Get-NetFirewallProfile - Gets properties for firewall profiles 
+Set-NetFirewallProfile - Sets properties for firewall profiles 
+
+
+#Group Policy management cmdlets 
+New-GPO - Creates a new GPO 
+Get-GPO - Retrieves a GPO 
+Set-GPO - Modifies properties of a GPO 
+Remove-GPO - Deletes a GPO 
+Rename-GPO - Renames a GPO 
+Backup-GPO - Creates a backup Of a GPO 
+copy-GPO - Copies a GPO from one domain to another 
+Restore-GPO - Restores a GPO from backup files 
+New-GPLink - Links a GPO to an AD DS container 
+Import-GPO - Imports GPO settings from a backed-up GPO 
+Set-GPRegistryValue - Configures one or more registry-based policy settings in a GPO 
+
+
+#Server Manager cmdlets  
+Get- WindowsFeature - Obtains and displays information about Windows Server roles, services, and features on the local computer 
+Install-WindowsFeature - Installs roles, services, or features 
+Uninstall- WindowsFeature - Uninstalls roles, services, or features 
+
+#Syntax Example:
+Install-WindowsFeature "nlb" 
+
+
+#Hyper-V cmdlets 
+Get-VM - Gets properties of a VM 
+Set-VM - Sets properties of a VM 
+New-VM - Creates a new VM 
+Start-VM - Starts a VM 
+Stop-VM - Stops a VM 
+Restart-VM - Restarts a VM 
+Suspend-VM - Pauses a VM 
+Resume-VM - Resumes a paused VM 
+Import-VM - Imports a VM from a file 
+Export-VM - Exports a VM to a file 
+Checkpoint-VM - Creates a checkpoint of a VM 
+
+
+#IIS administration cmdlets 
+New-IISSite - Creates a new IIS website
+Get-IISSite - Gets properties and configuration information about an IIS website 
+Start- IISSite - Starts an existing IIS website on the IIS server 
+Stop-ISSSite - Stops an IIS website 
+New-WebApplication - Creates a new web application 
+Remove-WebApplication - Deletes a web application 
+New-WebAppPool - Creates a new web application pool 
+Restart-WebAppPool - Restarts a web application pool 
+
+
+#Managing permissions with PowerShell 
+Get-Acl - Gets objects that represent the security descriptor of a file or resource. The security descriptor includes the access control lists (ACLs) of the resource. The ACL lists permissions that users and groups have to access the resource. 
+Set-Acl - Changes the security descriptor Of a specified item, such as a file, folder, or a registry key, to match the values in a security descriptor that you supply 
+
+#To update access permissions: 
+#1)Use Get-Acl to retrieve the existing access control list rules for the Object. 
+#2)Create a new FileSystemAccessRule to be applied to the object. 
+#3)Add the new rule to the existing ACL permission set. 
+#4)Use Set-Acl to apply the new ACL to the existing file or folder. 
+
+
+
+#Create Hyper-V Machine
+
+$VMName = "MSSAVM"
+ 
+$VM = @{
+     Name = $VMName
+     MemoryStartupBytes = 2147483648
+     Generation = 2
+     NewVHDPath = "C:\vmstore\$VMName\$VMName.vhdx"
+     NewVHDSizeBytes = 53687091200
+     BootDevice = "VHD"
+     Path = "C:\vmstore\$VMName"
+}
+
+#Create a new VM
+New-VM -Name DC -MemoryStartupBytes 512MB -Path C:\VM
+
+# Display Virtual Switches for the VM
+Get-VM "MSSAVM" | Get-VMNetworkAdapter
+
+# Get all the Virtual Switches on the Host
+Get-VMSwitch | ft
+ 
+# Connect the Private Virtual Switch to the Machine 
+Get-VM "MSSAVM" | Get-VMNetworkAdapter | Connect-VMNetworkAdapter -SwitchName "PVS"
+ 
+# Boot the VM
+Start-VM -Name MSSAVM -Verbose
+ 
+# Show Status of Running and off VM's
+Get-VM | where {$_.State -eq 'Running'}
+ 
+Get-VM | where {$_.State -eq 'Off'}
+ 
+# Shuts down the VM
+Stop-VM -Name MSSAVM
+ 
+# Configures Startup and Dynamic Memory for the VM
+Set-VMMemory -VMName MSSAVM -DynamicMemoryEnabled $true -StartupBytes 2048MB -MinimumByte 2048MB
+ 
+# Deletes and Remove all File resources for the VM
+Remove-VM -Name MSSAVM -Force -Verbose
+Stop-VM -Name CL-1
+Remove-Item -Path C:\vmstore\MSSAVM\MSSAVM.vhdx -Confirm
+Remove-Item -Path C:\vmstore\MSSAVM -Force
+
+
+
+#Create the London Admins group and place them in the OU at the same 
+time. 
+New-ADGroup "London Admins" —Group cope Global —Path 
+
+#create a new VM named LON-GUEST1
+New-VM –Name LON-GUEST1 –MemoryStartupBytes 1024MB –VHDPath "E:\VirtualMachines\LON-GUEST1\LON-GUEST1.vhd" –SwitchName "Isolated Network"
+
+#Enable Host Resource Protection to regulate resource usage on the host 
+Set-VMProcessor LON-GUEST2 -EnableHostResourceProtection $true
+
+#Enable Nested Virtualization
+Set-VMProcessor -VMName LON-GUEST1 -ExposeVirtualizationExtensions $true
+
+
+
+##Install Docker on Windows Server
+#In the Windows PowerShell ISE script pane enter the following commands on the first two lines:
+
+Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/microsoft/Windows-Containers/Main/helpful_tools/Install-DockerCE/install-docker-ce.ps1" -o install-docker-ce.ps1
+.\install-docker-ce.ps1
+
+#From the Windows PowerShell ISE toolbar, select the Run Script command.
+#The Invoke-Webrequest command downloads the runtime environment needed to run containers. After running the install-docker-ce.ps1 command, LON-SVR1 restarts.
+#After LON-SVR1 restarts, sign in.. The installation continues.
+#When you receive the message Script complete!, close PowerShell.
+
+#Download an image
+#To download a server-core image that matches the host operating system (OS), run the following command:
+
+docker pull mcr.microsoft.com/windows/servercore/iis:windowsservercore-ltsc2022
+  
+#Deploy a new container
+#On LON-SVR1, confirm the Docker image that's currently pulled by running the following command in Windows PowerShell ISE:
+
+Docker images
+
+#To run the IIS container, enter the following command:
+
+Docker run -d -p 8080:80 --name ContosoSite mcr.microsoft.com/windows/servercore/iis:windowsservercore-ltsc2022 cmd
+
+#This command runs the IIS image as a background service (-d) named ContosoSite and configures networking such that port 8080 of the container host (LON-SVR1) maps to port 80 of the container.
+#Enter the following command to retrieve the container host's IP address information:
+
+ipconfig
+
+#Note the IPv4 address of the Ethernet adapter named vEthernet (nat). This is the new container's address. Make a note of the IPv4 address of the Ethernet adapter named Ethernet. This is the IP address of the Host (LON-SVR1).
+#From the taskbar, select Microsoft Edge, and then enter http://172.16.0.21:8080.
+#Observe the default IIS page provided by IIS running in the Docker container.
+
+#Manage the container
+#At the Windows PowerShell ISE command prompt, run the following command:
+
+docker ps
+
+#This command provides information on the container that's currently running on LON-SVR1. Take note of the container name as you'll use it to stop the container.
+#At the Windows PowerShell ISE command prompt, run the following command:
+
+docker stop ContosoSite
+
+#At the Windows PowerShell ISE command prompt, run the following command to confirm that the container has stopped:
+
+docker ps
+
+#Results
+After this exercise, you'll have deployed and managed a container.
+
+#Configure Windows Server Container | Docker Equivalent 
+Cmdlet: New-Container -Name MyContainerName -Image mycontainerimage:tag
+Docker: docker run -it mcr.microsoft.com/windows/version cmd.exe
+
+
+
+
+#Add Computer to Domain:
+Add-Computer -DomainName  contos0.local -Restart
+
+
+#AD Deploy Script:
+#$domainName = "contoso.local"
+#$Adminpassword = "demo@pass123"
+
+$domainName = $args[0]
+$AdminPassword = $args[1]
+if (!$domainName) {$domainName = "contoso.local"}
+if (!$AdminPassword) {$AdminPassword = "demo@pass123"}
+
+Set-DnsClient `
+    -InterfaceAlias "Ethernet*" `
+    -ConnectionSpecificSuffix $domainName
+    
+Install-WindowsFeature `power
+    -Name AD-Domain-Services `
+    -IncludeManagementTools
+
+$securePassword = ConvertTo-SecureString $AdminPassword `
+    -AsPlainText `
+    -Force
+
+Install-ADDSForest `
+    -DomainName $domainName `
+    -SafeModeAdministratorPassword $securePassword `
+    -Force
+
+#Variable Declarations:
+The script starts by declaring two variables, $domainName and $AdminPassword, which are meant to hold the domain name and administrator password. In the comments (lines starting with #), sample values are provided for these variables.
+#Command-Line Arguments:
+The script checks if command-line arguments have been provided. It uses the $args array to retrieve arguments at positions 0 and 1 (which correspond to the domain name and admin password), and assigns them to the corresponding variables. If no arguments are provided, it falls back to the default values specified in the comments.
+#Set-DnsClient:
+This cmdlet configures the DNS client settings for the network interface(s) whose alias matches "Ethernet*". It sets the connection-specific suffix to the domain name provided. This step is essential for DNS resolution within the Active Directory domain.
+#Install-WindowsFeature:
+This cmdlet installs the "Active Directory Domain Services" feature along with its management tools. It is a prerequisite for setting up a domain controller.
+#Secure Password Creation:
+The script converts the provided admin password (in plain text) into a secure string using the ConvertTo-SecureString cmdlet. This is required for specifying the SafeModeAdministratorPassword when promoting a server to a domain controller.
+#Install-ADDSForest:
+This cmdlet configures the server to act as a domain controller by promoting it to be the first domain controller in a new Active Directory forest. It sets the domain name to the value provided, specifies the SafeModeAdministratorPassword as the secure password created earlier, and forces the operation to proceed. This is a critical step in creating a new Active Directory environment.
+
+
+
+
+#ADDS Server Configuration:
+Rename-Computer -NewName "ADDS"
+Set-TimeZone -Name "Eastern Standard Time"
+New-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress "192.168.1.10" -PrefixLength 24 -DefaultGateway "192.168.1.1"
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses ("192.168.1.10")
+Restart-Computer	
+
+
+#Create and add a shared VHD (Datal.vhds) that's stored on volume 1 of the CSV to two VMS named VMI and VM2. you use the following commands in Windows PowerShell: 
+New-VHD —path C:\ClusterStorage\Volume1\Data1.vhds -Dynamic -SizeBytes
+127GB 
+Add-VMHardDiskDrive -VMName VM1 -Path 
+C:\ClusterStorage\Volume1\Data1.vhds -ShareVirtualDisk 
+Add-VMHardDiskDrive -VMName VM2 -Path 
+C:\ClusterStorage\Volume1\Data1.vhds -ShareVirtualDisk 
+
+#In addition, if you want to add a shared VHD (Witness.vhdx) that's stored on an SMB file share (ServerI\ShareI) to a VM that's named VM2, you should use the following command in Windows PowerShell: 
+Add-VMHardDiskDrive —VMName VM2 -path  \\Server1\Share1\Witness.vhds — 
+SharevirtualDisk 
+
+#Create new VHD:
+New-VHD -Path c:\sales.vhd -Dynamic -SizeBytes 10Gb | Mount-VHD -Passthru |Initialize-Disk -Passthru |New-Partition -AssignDriveLetter -UseMaximumSize |Format-Volume -FileSystem NTFS -Confirm:$false -Force
+	
+#Convert VHD to .vhdx:
+Convert-VHD –Path C:\Sales.vhd –DestinationPath c:\Sales.vhdx
+
+#Initiate Remote Powershell Session & Install roles and features VM:
+Enter-PSSession -VMName  VMNAMEHERE
+Get-WindowsFeature -Name DHCP
+Install-WindowsFeature -Name DHCP -IncludeManagementTools -Verbose
+Restart-Computer -Force
+
+#Verify Drain On Shutdown
+(Get-Cluster).DrainOnShutdown
+
+
+#Install the Failover Clustering feature
+Install-WindowsFeature –Name Failover-Clustering –IncludeManagementTools
+
+#Start a remote session, connect to lon-svr3, & install Failover-clustering feature
+$cred=Get-Credential
+$sess = New-PSSession -Credential $cred -ComputerName lon-svr3.contoso.com
+Enter-PSSession $sess
+Install-WindowsFeature –Name Failover-Clustering –IncludeManagementTools
+
+
+#Validate and create a failover cluster:
+Test-Cluster LON-SVR2, LON-SVR3
+
+#Create a new Cluster:
+New-Cluster -Name VMCluster -Node lon-svr2 -StaticAddress 172.16.0.126
+
+
+
+
+
+## Login to Office 365 ##
+ 
+Set-ExecutionPolicy RemoteSigned
+ 
+$UserCredential = Get-Credential
+ 
+$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
+ 
+Import-PSSession $Session -DisableNameChecking
+ 
+## Enable Modern Authentication ##
+Set-OrganizationConfig -OAuth2ClientProfileEnabled $true
+ 
+Get-OrganizationConfig | Format-Table Name,OAuth* -Auto
+ 
+Remove-PSSession $Session
+
+## Creating new local user and group ##
+
+New-LocalGroup -Name "LegacyAppAccess" -Description "This is a test group for the challenge"
+ 
+New-LocalUser -Name "TestUser1" -Description "test user for challenge" -NoPassword
+ 
+Add-LocalGroupMember -Group "LegacyAppAccess" -Member "TestUser1"
+ 
+Get-LocalGroupMember -Group "LegacyAppAccess" -Member "TestUser1"
+
+## creating script to create user with default password ##
+
+# Prompt the user for input
+$FirstName = Read-Host "Enter the first name"
+$LastName = Read-Host "Enter the last name"
+
+# Concatenate the first name and last name to create the username
+$Username = $FirstName[0] + $LastName
+
+# Set the fixed password for each user
+$Password = ConvertTo-SecureString -String "Password" -AsPlainText -Force
+
+# Create the user account
+New-LocalUser -Name $Username -FullName "$FirstName $LastName" -Description "User Account for $FirstName $LastName" -Password $Password -AccountNeverExpires
+
+# Add the user to a specific local group
+$GroupName = "LegacyAppAccess"
+Add-LocalGroupMember -Group $GroupName -Member $Username
+
+# Display a message with the created username
+Write-Host "User account '$Username' created successfully and added to the '$GroupName' group."
+
+## converting group members to CSV document ##
+
+# Specify the local group name
+$GroupName = "LegacyAppAccess"
+
+# Get the members of the local group
+$GroupMembers = Get-LocalGroupMember -Group $GroupName
+
+# Specify the path for the CSV file
+$CsvFilePath = "E:\CSV Export Files\LegacyAppAccess_Members.csv"
+
+# Export the member information to a CSV file
+$GroupMembers | Export-Csv -Path $CsvFilePath -NoTypeInformation
+
+Write-Host "Member information of '$GroupName' exported to '$CsvFilePath'."
+
+## Converting group members to a JSON file ##
+
+# Specify the local group name
+$GroupName = "LegacyAppAccess"
+
+# Get the members of the local group
+$GroupMembers = Get-LocalGroupMember -Group $GroupName
+
+# Specify the path for the JSON file
+$JsonFilePath = "E:\JSON Export Files\LegacyAppAccess_Members.json"
+
+# Convert the member information to JSON and save it to a file
+$GroupMembers | ConvertTo-Json | Set-Content -Path $JsonFilePath
+
+Write-Host "Member information of '$GroupName' exported to '$JsonFilePath'."
